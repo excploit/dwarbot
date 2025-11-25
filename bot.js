@@ -1,7 +1,8 @@
-// --- DWAR FARM BOTU v35 (INVERT BUTTONS & IMAGE FIX) ---
+// --- DWAR FARM BOTU v36 (IMAGE SCALE FIX) ---
 (function() {
-    console.log("Bot v35 başlatılıyor...");
+    console.log("Bot v36 başlatılıyor...");
 
+    // Kütüphane Kontrolü
     if (typeof SparkMD5 === 'undefined') {
         var script = document.createElement('script');
         script.src = "https://cdnjs.cloudflare.com/ajax/libs/spark-md5/3.0.0/spark-md5.min.js";
@@ -13,9 +14,10 @@
 
     function main() {
         const SECRET_KEY = "41775e02da98ddb63c980dee";
-        const STORAGE_CONF = "dwar_bot_v35_conf";
-        const STORAGE_STATS = "dwar_bot_v35_stats";
+        const STORAGE_CONF = "dwar_bot_v36_conf";
+        const STORAGE_STATS = "dwar_bot_v36_stats";
 
+        // Ayarlar
         let config;
         try {
             config = JSON.parse(localStorage.getItem(STORAGE_CONF)) || { themeColor: "#27ae60", delayMin: 1000, delayMax: 3000, panelW: 360, panelH: 600 };
@@ -25,6 +27,7 @@
         
         let stats = JSON.parse(localStorage.getItem(STORAGE_STATS)) || {};
 
+        // Değişkenler
         const imageCache = {}; 
         const activeRequests = {}; 
         const failedImages = {}; 
@@ -36,43 +39,51 @@
         let uiTimer = null;
         let lastHeight = config.panelH + "px";
 
+        // Eski paneli temizle
         const old = document.getElementById("dwarBotPanel");
         if (old) old.remove();
 
-        // --- CSS ---
-        const styleId = "dwarBotStylesV35";
+        // --- CSS (DÜZELTİLDİ) ---
+        const styleId = "dwarBotStylesV36";
         if (!document.getElementById(styleId)) {
             const style = document.createElement('style');
             style.id = styleId;
             style.innerHTML = `
+                /* Genel Panel */
                 #dwarBotPanel { font-family: 'Segoe UI', sans-serif; font-size: 13px; color: #eee; background: #1e1e1e; border: 2px solid ${config.themeColor}; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.9); display: flex; flex-direction: column; overflow: hidden; z-index: 2147483647; resize: both; min-width: 320px; min-height: 180px; position: fixed; top: 50px; left: 50px; width: ${config.panelW}px; height: ${config.panelH}px; box-sizing: border-box; transition: border-color 0.3s; }
+                
+                /* Header & Tabs */
                 .dwar-header { padding: 12px 15px; background: ${config.themeColor}; color: white; display: flex; justify-content: space-between; align-items: center; cursor: move; user-select: none; font-weight: bold; border-bottom: 1px solid rgba(0,0,0,0.2); flex-shrink: 0; transition: background 0.3s; }
                 .dwar-tabs { display: flex; background: #252526; border-bottom: 1px solid #333; flex-shrink: 0; }
                 .dwar-tab { flex: 1; padding: 12px; background: transparent; border: none; color: #888; cursor: pointer; font-weight: 600; border-bottom: 3px solid transparent; transition: all 0.2s; }
                 .dwar-tab.active { color: #fff; border-bottom-color: ${config.themeColor}; background: #2d2d2d; }
+                
+                /* İçerik Alanları */
                 .dwar-content { flex: 1; position: relative; overflow: hidden; background: #1e1e1e; min-height: 0; display: flex; flex-direction: column; }
                 .dwar-view { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; flex-direction: column; overflow-y: auto; }
                 .dwar-view.show { display: flex; }
                 .dwar-view-padded { padding: 20px; box-sizing: border-box; } 
                 
+                /* Form Elemanları */
                 .dwar-btn { flex: 1; padding: 10px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; color: white; transition: all 0.2s; box-sizing: border-box; }
                 .dwar-btn:hover { opacity: 0.9; }
                 .dwar-input { width: 100%; padding: 10px; background: #333; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; margin-top: 5px; margin-bottom: 15px; }
                 .dwar-label { display: block; color: #ccc; font-weight: 600; font-size: 12px; margin-bottom: 2px; }
                 
+                /* Liste & Resimler (DÜZELTİLDİ) */
                 .dwar-ctrl-group { padding: 15px; border-bottom: 1px solid #333; background: #252526; flex-shrink: 0; }
-                
-                /* Liste Tasarımı Düzeltildi */
                 .dwar-list-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid #333; transition: background 0.2s; }
                 .dwar-list-item:hover { background: #252526; }
                 
                 .dwar-img-box { width: 32px; height: 32px; background: #000; border: 1px solid #555; border-radius: 4px; margin-right: 12px; overflow: hidden; flex-shrink: 0; position: relative; }
-                .dwar-img-inner { width: 100%; height: 100%; background-size: cover; background-position: center; image-rendering: pixelated; }
+                /* ESKİ YÖNTEME DÖNÜŞ: 24px temel alıp scale etme */
+                .dwar-img-inner { width: 24px; height: 24px; position: absolute; top: 0; left: 0; transform: scale(1.333333); transform-origin: top left; background-repeat: no-repeat; image-rendering: pixelated; }
                 
                 /* Invert Buton */
                 .dwar-btn-invert { background: #eee; color: ${config.themeColor}; border: 1px solid ${config.themeColor}; }
                 .dwar-btn-invert:hover { background: ${config.themeColor}; color: #fff; }
 
+                /* Log & Status */
                 .dwar-log { height: 130px; background: #000; border-top: 2px solid #333; padding: 8px; font-family: monospace; font-size: 11px; color: #aaa; overflow-y: auto; flex-shrink: 0; box-sizing: border-box; }
                 .dwar-status { padding: 12px 25px 12px 15px; background: #222; color: #ccc; font-size: 11px; font-weight: bold; border-top: 1px solid #333; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; border-radius: 0 0 6px 6px; }
                 .dwar-stat-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #333; }
@@ -80,13 +91,13 @@
             document.head.appendChild(style);
         }
 
+        // --- HTML YAPISI ---
         const panel = document.createElement('div');
         panel.id = "dwarBotPanel";
-        panel.className = "dwar-panel"; // class kullanımı kaldırıldı, style id ile yönetiliyor ama css seçicisi için id yeterli
         
         const header = document.createElement('div');
         header.className = "dwar-header";
-        header.innerHTML = `<span>Bot v35</span><div><span id="btnMin" style="cursor:pointer;margin-right:15px;padding:5px">[_]</span><span id="btnClose" style="cursor:pointer;padding:5px">[X]</span></div>`;
+        header.innerHTML = `<span>Bot v36</span><div><span id="btnMin" style="cursor:pointer;margin-right:15px;padding:5px">[_]</span><span id="btnClose" style="cursor:pointer;padding:5px">[X]</span></div>`;
         panel.appendChild(header);
 
         const tabs = document.createElement('div');
@@ -97,7 +108,7 @@
         const content = document.createElement('div');
         content.className = "dwar-content";
 
-        // VIEWS
+        // 1. ANA SAYFA
         const vMain = document.createElement('div');
         vMain.id = "viewMain";
         vMain.className = "dwar-view show";
@@ -114,6 +125,7 @@
         `;
         content.appendChild(vMain);
 
+        // 2. İSTATİSTİK
         const vStats = document.createElement('div');
         vStats.id = "viewStats";
         vStats.className = "dwar-view dwar-view-padded";
@@ -126,6 +138,7 @@
         `;
         content.appendChild(vStats);
 
+        // 3. AYARLAR
         const vSettings = document.createElement('div');
         vSettings.id = "viewSettings";
         vSettings.className = "dwar-view dwar-view-padded";
@@ -142,12 +155,14 @@
 
         panel.appendChild(content);
 
+        // Mini Mod Butonu
         const miniBtn = document.createElement('button');
         miniBtn.innerText = "OTO BAŞLAT";
         miniBtn.className = "dwar-btn";
         miniBtn.style.cssText = "display:none; margin:15px; background:#004d40; flex-shrink:0;";
         panel.insertBefore(miniBtn, content);
 
+        // Durum Çubuğu
         const statusBar = document.createElement('div');
         statusBar.className = "dwar-status";
         statusBar.innerText = "Hazır";
@@ -164,6 +179,7 @@
         const logArea = document.getElementById('logArea');
         const btnMin = document.getElementById('btnMin');
 
+        // Tab Değişimi
         panel.querySelectorAll('.dwar-tab').forEach(t => {
             t.onclick = () => {
                 panel.querySelectorAll('.dwar-tab').forEach(x => x.classList.remove('active'));
@@ -174,6 +190,7 @@
             };
         });
 
+        // Ayarları Kaydet
         document.getElementById('btnSave').onclick = () => {
             config.themeColor = document.getElementById('confColor').value;
             config.delayMin = parseInt(document.getElementById('confMin').value);
@@ -197,10 +214,11 @@
             panel.style.borderColor = config.themeColor;
             header.style.background = config.themeColor;
             document.querySelector('.dwar-tab.active').style.borderBottomColor = config.themeColor;
-            // Invert butonları güncelle (Tekrar render ederek)
+            // Invert butonları güncelle
             filterAndRender();
         }
 
+        // İstatistik Render
         function renderStats() {
             const list = document.getElementById('statsList');
             const total = document.getElementById('totalStat');
@@ -216,6 +234,7 @@
         }
         function saveStat(n) { if(!stats[n]) stats[n]=0; stats[n]++; localStorage.setItem(STORAGE_STATS, JSON.stringify(stats)); }
 
+        // Minimize
         btnMin.onclick = () => {
             isMinimized = !isMinimized;
             if (isMinimized) {
@@ -235,6 +254,7 @@
         };
         document.getElementById('btnClose').onclick = () => { panel.remove(); clearTimeout(monitorTimer); clearInterval(uiTimer); };
 
+        // Helpers
         function setStatus(m, t) {
             statusBar.innerText = m;
             statusBar.style.background = t=='active'?'#004d40':t=='error'?'#b71c1c':t=='wait'?'#e65100':'#222';
@@ -251,7 +271,7 @@
             b.innerText = "⛔"; b.style.background = "#b71c1c"; b.style.color = "#fff"; b.disabled = true;
             setTimeout(() => { 
                 b.innerText = t; 
-                b.style.background = "#eee"; // Eski haline (Invert) dön
+                b.style.background = "#eee";
                 b.style.color = config.themeColor;
                 b.disabled = false; 
             }, 1000);
@@ -262,6 +282,7 @@
             uiTimer = setInterval(() => { l--; if(l>0) setStatus(`Toplanıyor: ${name} - ${num} ... ${l}s`, 'active'); else { clearInterval(uiTimer); setStatus("Tamamlanıyor...", 'wait'); } }, 1000);
         }
 
+        // Bot Logic
         function toggleAuto() {
             if(!autoActive) {
                 autoActive = true; isBusy = true;
@@ -309,11 +330,10 @@
             l.forEach(i => {
                 const r = document.createElement('div'); r.className = "dwar-list-item";
                 
-                // Resim Logic (Cache ve Load)
+                // Resim Logic (DÜZELTİLDİ)
                 let imH = `<div class="dwar-img-box"></div>`;
                 if(i.swf) {
                     const c = i.swf.split('.')[0];
-                    // Bu kısmı düzelttik, class adı karışıklığı yok artık
                     const imgClass = `img-cache-${c}`;
                     
                     if(!imageCache[c] && !activeRequests[c] && !failedImages[c]) {
@@ -323,13 +343,13 @@
                             fr.onloadend = () => { 
                                 imageCache[c]=fr.result; 
                                 delete activeRequests[c]; 
-                                // Tüm aynı class'a sahip elemanları güncelle
                                 document.querySelectorAll(`.${imgClass}`).forEach(e=>e.style.backgroundImage=`url('${fr.result}')`); 
                             };
                             fr.readAsDataURL(b);
                         }).catch(()=>{delete activeRequests[c]; failedImages[c]=1;});
                     }
                     const bg = imageCache[c] ? `background-image:url('${imageCache[c]}')` : '';
+                    // Scale class burada kullanılıyor
                     imH = `<div class="dwar-img-box"><div class="dwar-img-inner ${imgClass}" style="${bg}"></div></div>`;
                 }
 
@@ -338,13 +358,12 @@
                 // INVERT BUTTON STYLING
                 const b = document.createElement('button'); 
                 b.innerText = "AL"; 
-                b.className = "dwar-btn dwar-btn-invert"; // CSS'te tanımlı
+                b.className = "dwar-btn dwar-btn-invert";
                 b.style.flex = "none";
                 b.style.width = "60px";
                 b.style.fontSize = "11px";
                 b.style.padding = "6px";
                 
-                // Manuel Invert Logic (CSS class yetmediği durumlarda JS ile destek)
                 b.style.backgroundColor = "#eee";
                 b.style.color = config.themeColor;
                 b.style.border = `1px solid ${config.themeColor}`;
