@@ -1,6 +1,6 @@
-// --- DWAR FARM BOTU v40 (GIF URL FIX & STABLE) ---
+// --- DWAR FARM BOTU v42 (PROFESSION FILTERS) ---
 (function() {
-    console.log("Bot v40 başlatılıyor...");
+    console.log("Bot v42 başlatılıyor...");
 
     if (typeof SparkMD5 === 'undefined') {
         var script = document.createElement('script');
@@ -13,14 +13,14 @@
 
     function main() {
         const SECRET_KEY = "41775e02da98ddb63c980dee";
-        const STORAGE_CONF = "dwar_bot_v40_conf";
-        const STORAGE_STATS = "dwar_bot_v40_stats";
+        const STORAGE_CONF = "dwar_bot_v42_conf";
+        const STORAGE_STATS = "dwar_bot_v42_stats";
 
         let config;
         try {
-            config = JSON.parse(localStorage.getItem(STORAGE_CONF)) || { themeColor: "#27ae60", delayMin: 1000, delayMax: 3000, panelW: 360, panelH: 600 };
+            config = JSON.parse(localStorage.getItem(STORAGE_CONF)) || { themeColor: "#27ae60", delayMin: 1000, delayMax: 3000, panelW: 360, panelH: 650 };
         } catch (e) {
-            config = { themeColor: "#27ae60", delayMin: 1000, delayMax: 3000, panelW: 360, panelH: 600 };
+            config = { themeColor: "#27ae60", delayMin: 1000, delayMax: 3000, panelW: 360, panelH: 650 };
         }
         let stats = JSON.parse(localStorage.getItem(STORAGE_STATS)) || {};
 
@@ -31,15 +31,20 @@
         
         let autoActive = false; 
         let isBusy = false; 
+        let isMinimized = false;
         let monitorTimer = null; 
         let uiTimer = null;
-        let currentTask = null; 
+        let currentTask = null;
+        let lastHeight = config.panelH + "px";
+
+        // Meslek Filtre Durumu (1: Bitki, 2: Maden, 4: Balık)
+        let activeProfs = []; // Boşsa hepsi
 
         const old = document.getElementById("dwarBotPanel");
         if (old) old.remove();
 
         // --- CSS ---
-        const styleId = "dwarBotStylesV40";
+        const styleId = "dwarBotStylesV42";
         if (!document.getElementById(styleId)) {
             const style = document.createElement('style');
             style.id = styleId;
@@ -55,30 +60,35 @@
                 .dwar-view-padded { padding: 20px; box-sizing: border-box; } 
                 .dwar-btn { flex: 1; padding: 10px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; color: white; transition: all 0.2s; box-sizing: border-box; }
                 .dwar-btn:hover { opacity: 0.9; }
-                .dwar-input { width: 100%; padding: 10px; background: #333; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; margin-top: 5px; margin-bottom: 15px; }
+                .dwar-input { width: 100%; padding: 10px; background: #333; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; margin-top: 5px; margin-bottom: 5px; }
                 .dwar-label { display: block; color: #ccc; font-weight: 600; font-size: 12px; margin-bottom: 2px; }
                 .dwar-ctrl-group { padding: 15px; border-bottom: 1px solid #333; background: #252526; flex-shrink: 0; }
                 .dwar-list-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid #333; transition: background 0.2s; }
                 .dwar-list-item:hover { background: #252526; }
                 .dwar-img-box { width: 32px; height: 32px; background: #000; border: 1px solid #555; border-radius: 4px; margin-right: 12px; overflow: hidden; flex-shrink: 0; position: relative; }
-                /* Resimler artık tam oturuyor ve pixelated kapalı (daha yumuşak) */
                 .dwar-img-inner { width: 100%; height: 100%; background-size: 100% 100%; background-position: center; background-repeat: no-repeat; }
                 .dwar-btn-invert { background: #eee; color: ${config.themeColor}; border: 1px solid ${config.themeColor}; }
                 .dwar-btn-invert:hover { background: ${config.themeColor}; color: #fff; }
                 .dwar-log { height: 130px; background: #000; border-top: 2px solid #333; padding: 8px; font-family: monospace; font-size: 11px; color: #aaa; overflow-y: auto; flex-shrink: 0; box-sizing: border-box; }
                 .dwar-status { padding: 12px 25px 12px 15px; background: #222; color: #ccc; font-size: 11px; font-weight: bold; border-top: 1px solid #333; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; border-radius: 0 0 6px 6px; }
                 .dwar-stat-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #333; }
+                
+                /* YENİ: Meslek Filtreleri */
+                .dwar-prof-filters { display: flex; gap: 5px; margin-bottom: 10px; }
+                .dwar-chip { flex: 1; padding: 6px; background: #333; border: 1px solid #444; color: #888; border-radius: 15px; font-size: 11px; font-weight: bold; cursor: pointer; text-align: center; transition: all 0.2s; user-select: none; }
+                .dwar-chip:hover { background: #444; }
+                .dwar-chip.active { background: ${config.themeColor}; color: white; border-color: ${config.themeColor}; box-shadow: 0 2px 5px rgba(0,0,0,0.3); }
             `;
             document.head.appendChild(style);
         }
 
-        // --- PANEL HTML ---
+        // --- PANEL ---
         const panel = document.createElement('div');
         panel.id = "dwarBotPanel";
         
         const header = document.createElement('div');
         header.className = "dwar-header";
-        header.innerHTML = `<span>Bot v40</span><div><span id="btnMin" style="cursor:pointer;margin-right:15px;padding:5px">[_]</span><span id="btnClose" style="cursor:pointer;padding:5px">[X]</span></div>`;
+        header.innerHTML = `<span>Bot v42</span><div><span id="btnMin" style="cursor:pointer;margin-right:15px;padding:5px">[_]</span><span id="btnClose" style="cursor:pointer;padding:5px">[X]</span></div>`;
         panel.appendChild(header);
 
         const tabs = document.createElement('div');
@@ -89,7 +99,7 @@
         const content = document.createElement('div');
         content.className = "dwar-content";
 
-        // MAIN VIEW
+        // MAIN
         const vMain = document.createElement('div');
         vMain.id = "viewMain";
         vMain.className = "dwar-view show";
@@ -99,14 +109,21 @@
                     <button id="btnRef" class="dwar-btn" style="background:#444; border:1px solid #666;">YENİLE</button>
                     <button id="btnAuto" class="dwar-btn" style="background:#004d40; border:1px solid #00695c;">OTO BAŞLAT</button>
                 </div>
-                <input id="inpFilter" class="dwar-input" placeholder="Filtre (Örn: Akik|Bakır)" style="margin-bottom:0;">
+                
+                <div class="dwar-prof-filters">
+                    <div class="dwar-chip" data-prof="1">🌿 Bitki</div>
+                    <div class="dwar-chip" data-prof="2">⛏️ Maden</div>
+                    <div class="dwar-chip" data-prof="4">🐟 Balık</div>
+                </div>
+
+                <input id="inpFilter" class="dwar-input" placeholder="İsim Ara (Örn: Akik|Bakır)">
             </div>
             <div id="itemList" style="flex:1; overflow-y:auto;"></div>
             <div id="logArea" class="dwar-log"></div>
         `;
         content.appendChild(vMain);
 
-        // STATS VIEW
+        // STATS
         const vStats = document.createElement('div');
         vStats.id = "viewStats";
         vStats.className = "dwar-view dwar-view-padded";
@@ -119,7 +136,7 @@
         `;
         content.appendChild(vStats);
 
-        // SETTINGS VIEW
+        // SETTINGS
         const vSettings = document.createElement('div');
         vSettings.id = "viewSettings";
         vSettings.className = "dwar-view dwar-view-padded";
@@ -150,13 +167,30 @@
         document.body.appendChild(panel);
         dragElement(panel, header);
 
-        // --- LOGIC START ---
+        // --- LOGIC ---
         const btnRef = document.getElementById('btnRef');
         const btnAuto = document.getElementById('btnAuto');
         const inpFilter = document.getElementById('inpFilter');
         const btnMin = document.getElementById('btnMin');
+        const chips = panel.querySelectorAll('.dwar-chip');
 
-        // Tabs
+        // Chip (Meslek) Tıklama Mantığı
+        chips.forEach(chip => {
+            chip.onclick = () => {
+                const p = chip.getAttribute('data-prof');
+                if (activeProfs.includes(p)) {
+                    // Varsa çıkar (Toggle off)
+                    activeProfs = activeProfs.filter(x => x !== p);
+                    chip.classList.remove('active');
+                } else {
+                    // Yoksa ekle (Toggle on)
+                    activeProfs.push(p);
+                    chip.classList.add('active');
+                }
+                filterAndRender(); // Listeyi güncelle
+            };
+        });
+
         panel.querySelectorAll('.dwar-tab').forEach(t => {
             t.onclick = () => {
                 panel.querySelectorAll('.dwar-tab').forEach(x => x.classList.remove('active'));
@@ -167,7 +201,6 @@
             };
         });
 
-        // Settings
         document.getElementById('btnSave').onclick = () => {
             config.themeColor = document.getElementById('confColor').value;
             config.delayMin = parseInt(document.getElementById('confMin').value);
@@ -191,6 +224,8 @@
             panel.style.borderColor = config.themeColor;
             header.style.background = config.themeColor;
             document.querySelector('.dwar-tab.active').style.borderBottomColor = config.themeColor;
+            // Chip'lerin rengini güncelle
+            chips.forEach(c => { if(c.classList.contains('active')) c.style.backgroundColor = config.themeColor; });
             filterAndRender();
         }
 
@@ -214,8 +249,6 @@
             localStorage.setItem(STORAGE_STATS, JSON.stringify(stats)); 
         }
 
-        // Minimize
-        let lastHeight = config.panelH + "px";
         btnMin.onclick = () => {
             isMinimized = !isMinimized;
             if (isMinimized) {
@@ -259,7 +292,6 @@
             uiTimer = setInterval(() => { l--; if(l>0) setStatus(`Toplanıyor: ${name} - ${num} ... ${l}s`, 'active'); else { clearInterval(uiTimer); setStatus("Tamamlanıyor...", 'wait'); } }, 1000);
         }
 
-        // Auto Logic
         function toggleAuto() {
             if(!autoActive) {
                 autoActive = true; isBusy = true;
@@ -279,7 +311,6 @@
         btnRef.onclick = () => refreshList();
         inpFilter.oninput = () => filterAndRender();
 
-        // --- LIST FETCH & PARSE (DÜZELTİLDİ) ---
         async function refreshList(s=false) {
             if(!s) { itemList.innerHTML = "<div style='text-align:center;padding:20px;color:yellow'>Yükleniyor...</div>"; setStatus("Liste çekiliyor..."); }
             try {
@@ -290,16 +321,15 @@
                 const i = x.getElementsByTagName("item");
                 allItems = [];
                 for(let k=0; k<i.length; k++) {
-                    // Pic varsa al, yoksa swf'den üret (.gif ekle)
                     let imgFile = i[k].getAttribute("pic");
                     if(!imgFile && i[k].getAttribute("swf")) {
                         imgFile = i[k].getAttribute("swf").split('.')[0] + ".gif";
                     }
-                    
                     allItems.push({
                         name: i[k].getAttribute("name"),
                         num: i[k].getAttribute("num"),
-                        imgFile: imgFile // picId yerine direkt dosya adı
+                        prof: i[k].getAttribute("prof"), // YENİ: Prof bilgisini al
+                        imgFile: imgFile
                     });
                 }
                 allItems.sort((a,b) => a.name.localeCompare(b.name));
@@ -308,14 +338,25 @@
             } catch(e) { if(!s) itemList.innerHTML = "Hata"; setStatus("Liste Hatası", "error"); }
         }
 
+        // --- YENİ FİLTRELEME MANTIĞI ---
         function filterAndRender() {
             const v = inpFilter.value.toLowerCase();
             const k = v.split('|').map(x=>x.trim()).filter(x=>x.length>0);
-            const r = allItems.filter(i => k.length==0 ? true : k.some(z=>i.name.toLowerCase().includes(z)));
+            
+            const r = allItems.filter(i => {
+                // 1. İsim Kontrolü
+                const nameMatch = k.length === 0 || k.some(z => i.name.toLowerCase().includes(z));
+                
+                // 2. Meslek (Chip) Kontrolü
+                // Eğer activeProfs boşsa (hiçbiri seçili değilse) hepsini göster
+                // Doluysa, eşyanın prof'u listede var mı?
+                const profMatch = activeProfs.length === 0 || activeProfs.includes(i.prof);
+
+                return nameMatch && profMatch;
+            });
             render(r); return r;
         }
 
-        // --- RENDER (URL FIX) ---
         function render(l) {
             itemList.innerHTML = "";
             if(l.length===0) { itemList.innerHTML = "<div style='text-align:center;padding:20px;color:#666'>Sonuç yok</div>"; return; }
@@ -324,13 +365,11 @@
                 
                 let imH = `<div class="dwar-img-box"></div>`;
                 if(i.imgFile) {
-                    // Dosya adını nokta içerebileceği için benzersiz ID yap
                     const safeId = i.imgFile.replace(/[^a-zA-Z0-9]/g, '');
                     const imgClass = `img-cache-${safeId}`;
                     
                     if(!imageCache[safeId] && !activeRequests[safeId] && !failedImages[safeId]) {
                         activeRequests[safeId]=1;
-                        // URL artık direkt kullanılıyor
                         fetch(`https://dwar.gen.tr/images/data/farm/${i.imgFile}`)
                             .then(res=>{if(!res.ok)throw 1;return res.blob()})
                             .then(b=>{
@@ -422,21 +461,18 @@
 
                     if(st === "0") {
                         isBusy = false;
-                        // Hata mesajı varsa (msg doluysa) -> HATA
                         if(msg && msg.trim() !== "") {
                             addLog(`HATA: ${msg}`, "red"); setStatus(`Hata: ${msg}`, "error");
                             currentTask = null;
                             if(autoActive) monitorTimer = setTimeout(autoStep, 3000);
-                        } 
-                        // Hata mesajı yoksa (msg boş) -> BAŞARI (Sunucu bitmiş ve boşa düşmüş)
-                        else {
+                        } else {
                             clearInterval(uiTimer);
                             if(currentTask) {
-                                addLog(`Bitti: ${currentTask.name}`, "orange");
+                                addLog(`Toplama Bitti: ${currentTask.name}`, "orange");
                                 saveStat(currentTask.name);
                                 currentTask = null;
+                                if(!autoActive) refreshList(true);
                             }
-                            // Yeni döngüye geç
                             if(autoActive) {
                                 const rn = Math.floor(Math.random()*(config.delayMax-config.delayMin))+config.delayMin;
                                 setStatus(`Bitti. Bekle: ${(rn/1000).toFixed(1)}s`, "wait");
@@ -450,27 +486,29 @@
                     } else {
                         clearInterval(uiTimer); isBusy = false;
                         if(currentTask) {
-                            addLog(`Bitti: ${currentTask.name}`, "orange");
+                            addLog(`Toplama Bitti: ${currentTask.name}`, "orange");
                             saveStat(currentTask.name);
                             currentTask = null;
+                            if(!autoActive) refreshList(true);
                         }
                         if(autoActive) {
                             const rn = Math.floor(Math.random()*(config.delayMax-config.delayMin))+config.delayMin;
-                            setStatus(`Soğuma: ${rn/1000}s`, "wait"); monitorTimer = setTimeout(autoStep, rn);
+                            setStatus(`Bitti. Bekle: ${(rn/1000).toFixed(1)}s`, "wait");
+                            monitorTimer = setTimeout(autoStep, rn);
                         } else setStatus("Hazır", "normal");
                     }
                 } else {
-                    // Req yok
                     clearInterval(uiTimer); isBusy = false;
-                    // Burada da currentTask varsa bitmiş sayabiliriz ama garanti olsun diye ellemiyoruz
-                    // Sadece yeni döngüye geçiyoruz
                     currentTask = null;
                     if(autoActive) {
                         const rn = Math.floor(Math.random()*(config.delayMax-config.delayMin))+config.delayMin;
                         setStatus(`Bekle: ${rn/1000}s`, "wait"); monitorTimer = setTimeout(autoStep, rn);
                     } else setStatus("Hazır", "normal");
                 }
-            } catch(e) { setStatus("Bağlantı Hatası", "error"); monitorTimer = setTimeout(monitorLoop, 3000); }
+            } catch(e) { 
+                setStatus("Bağlantı Hatası", "error"); 
+                monitorTimer = setTimeout(monitorLoop, 3000); 
+            }
         }
 
         function dragElement(e, h) {
