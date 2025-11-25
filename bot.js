@@ -1,6 +1,6 @@
-// --- DWAR FARM BOTU v36 (IMAGE SCALE FIX) ---
+// --- DWAR FARM BOTU v39 (STATUS 0 FIX & SMART LOGIC) ---
 (function() {
-    console.log("Bot v36 başlatılıyor...");
+    console.log("Bot v39 başlatılıyor...");
 
     // Kütüphane Kontrolü
     if (typeof SparkMD5 === 'undefined') {
@@ -14,76 +14,61 @@
 
     function main() {
         const SECRET_KEY = "41775e02da98ddb63c980dee";
-        const STORAGE_CONF = "dwar_bot_v36_conf";
-        const STORAGE_STATS = "dwar_bot_v36_stats";
+        const STORAGE_CONF = "dwar_bot_v39_conf";
+        const STORAGE_STATS = "dwar_bot_v39_stats";
 
-        // Ayarlar
         let config;
         try {
             config = JSON.parse(localStorage.getItem(STORAGE_CONF)) || { themeColor: "#27ae60", delayMin: 1000, delayMax: 3000, panelW: 360, panelH: 600 };
         } catch (e) {
             config = { themeColor: "#27ae60", delayMin: 1000, delayMax: 3000, panelW: 360, panelH: 600 };
         }
-        
         let stats = JSON.parse(localStorage.getItem(STORAGE_STATS)) || {};
 
-        // Değişkenler
         const imageCache = {}; 
         const activeRequests = {}; 
         const failedImages = {}; 
         let allItems = [];
+        
         let autoActive = false; 
         let isBusy = false; 
         let isMinimized = false;
         let monitorTimer = null; 
         let uiTimer = null;
         let lastHeight = config.panelH + "px";
+        
+        // Mevcut görevi hafızada tutuyoruz
+        let currentTask = null; 
 
-        // Eski paneli temizle
         const old = document.getElementById("dwarBotPanel");
         if (old) old.remove();
 
-        // --- CSS (DÜZELTİLDİ) ---
-        const styleId = "dwarBotStylesV36";
+        // --- CSS ---
+        const styleId = "dwarBotStylesV39";
         if (!document.getElementById(styleId)) {
             const style = document.createElement('style');
             style.id = styleId;
             style.innerHTML = `
-                /* Genel Panel */
                 #dwarBotPanel { font-family: 'Segoe UI', sans-serif; font-size: 13px; color: #eee; background: #1e1e1e; border: 2px solid ${config.themeColor}; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.9); display: flex; flex-direction: column; overflow: hidden; z-index: 2147483647; resize: both; min-width: 320px; min-height: 180px; position: fixed; top: 50px; left: 50px; width: ${config.panelW}px; height: ${config.panelH}px; box-sizing: border-box; transition: border-color 0.3s; }
-                
-                /* Header & Tabs */
                 .dwar-header { padding: 12px 15px; background: ${config.themeColor}; color: white; display: flex; justify-content: space-between; align-items: center; cursor: move; user-select: none; font-weight: bold; border-bottom: 1px solid rgba(0,0,0,0.2); flex-shrink: 0; transition: background 0.3s; }
                 .dwar-tabs { display: flex; background: #252526; border-bottom: 1px solid #333; flex-shrink: 0; }
                 .dwar-tab { flex: 1; padding: 12px; background: transparent; border: none; color: #888; cursor: pointer; font-weight: 600; border-bottom: 3px solid transparent; transition: all 0.2s; }
                 .dwar-tab.active { color: #fff; border-bottom-color: ${config.themeColor}; background: #2d2d2d; }
-                
-                /* İçerik Alanları */
                 .dwar-content { flex: 1; position: relative; overflow: hidden; background: #1e1e1e; min-height: 0; display: flex; flex-direction: column; }
                 .dwar-view { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; flex-direction: column; overflow-y: auto; }
                 .dwar-view.show { display: flex; }
                 .dwar-view-padded { padding: 20px; box-sizing: border-box; } 
-                
-                /* Form Elemanları */
                 .dwar-btn { flex: 1; padding: 10px; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; color: white; transition: all 0.2s; box-sizing: border-box; }
                 .dwar-btn:hover { opacity: 0.9; }
                 .dwar-input { width: 100%; padding: 10px; background: #333; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; margin-top: 5px; margin-bottom: 15px; }
                 .dwar-label { display: block; color: #ccc; font-weight: 600; font-size: 12px; margin-bottom: 2px; }
-                
-                /* Liste & Resimler (DÜZELTİLDİ) */
                 .dwar-ctrl-group { padding: 15px; border-bottom: 1px solid #333; background: #252526; flex-shrink: 0; }
                 .dwar-list-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid #333; transition: background 0.2s; }
                 .dwar-list-item:hover { background: #252526; }
-                
                 .dwar-img-box { width: 32px; height: 32px; background: #000; border: 1px solid #555; border-radius: 4px; margin-right: 12px; overflow: hidden; flex-shrink: 0; position: relative; }
-                /* ESKİ YÖNTEME DÖNÜŞ: 24px temel alıp scale etme */
-                .dwar-img-inner { width: 24px; height: 24px; position: absolute; top: 0; left: 0; transform: scale(1.333333); transform-origin: top left; background-repeat: no-repeat; image-rendering: pixelated; }
-                
-                /* Invert Buton */
+                .dwar-img-inner { width: 100%; height: 100%; background-size: 100% 100%; background-position: center; background-repeat: no-repeat; }
                 .dwar-btn-invert { background: #eee; color: ${config.themeColor}; border: 1px solid ${config.themeColor}; }
                 .dwar-btn-invert:hover { background: ${config.themeColor}; color: #fff; }
-
-                /* Log & Status */
                 .dwar-log { height: 130px; background: #000; border-top: 2px solid #333; padding: 8px; font-family: monospace; font-size: 11px; color: #aaa; overflow-y: auto; flex-shrink: 0; box-sizing: border-box; }
                 .dwar-status { padding: 12px 25px 12px 15px; background: #222; color: #ccc; font-size: 11px; font-weight: bold; border-top: 1px solid #333; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; border-radius: 0 0 6px 6px; }
                 .dwar-stat-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #333; }
@@ -91,13 +76,13 @@
             document.head.appendChild(style);
         }
 
-        // --- HTML YAPISI ---
+        // --- PANEL ---
         const panel = document.createElement('div');
         panel.id = "dwarBotPanel";
         
         const header = document.createElement('div');
         header.className = "dwar-header";
-        header.innerHTML = `<span>Bot v36</span><div><span id="btnMin" style="cursor:pointer;margin-right:15px;padding:5px">[_]</span><span id="btnClose" style="cursor:pointer;padding:5px">[X]</span></div>`;
+        header.innerHTML = `<span>Bot v39</span><div><span id="btnMin" style="cursor:pointer;margin-right:15px;padding:5px">[_]</span><span id="btnClose" style="cursor:pointer;padding:5px">[X]</span></div>`;
         panel.appendChild(header);
 
         const tabs = document.createElement('div');
@@ -108,7 +93,7 @@
         const content = document.createElement('div');
         content.className = "dwar-content";
 
-        // 1. ANA SAYFA
+        // MAIN
         const vMain = document.createElement('div');
         vMain.id = "viewMain";
         vMain.className = "dwar-view show";
@@ -125,7 +110,7 @@
         `;
         content.appendChild(vMain);
 
-        // 2. İSTATİSTİK
+        // STATS
         const vStats = document.createElement('div');
         vStats.id = "viewStats";
         vStats.className = "dwar-view dwar-view-padded";
@@ -138,12 +123,12 @@
         `;
         content.appendChild(vStats);
 
-        // 3. AYARLAR
+        // SETTINGS
         const vSettings = document.createElement('div');
         vSettings.id = "viewSettings";
         vSettings.className = "dwar-view dwar-view-padded";
         vSettings.innerHTML = `
-            <label class="dwar-label">Tema Rengi</label><input type="color" id="confColor" value="${config.themeColor}" style="width:100%; height:40px; border:none; margin-bottom:20px; cursor:pointer; border-radius:4px;">
+            <label class="dwar-label">Tema Rengi</label><input type="color" id="confColor" value="${config.themeColor}" style="width:100%; height:40px; min-height:40px; border:none; margin-bottom:20px; cursor:pointer; border-radius:4px;">
             <label class="dwar-label">Min Gecikme (ms)</label><input type="number" id="confMin" class="dwar-input" value="${config.delayMin}">
             <label class="dwar-label">Max Gecikme (ms)</label><input type="number" id="confMax" class="dwar-input" value="${config.delayMax}">
             <div style="margin-top:auto;">
@@ -155,14 +140,12 @@
 
         panel.appendChild(content);
 
-        // Mini Mod Butonu
         const miniBtn = document.createElement('button');
         miniBtn.innerText = "OTO BAŞLAT";
         miniBtn.className = "dwar-btn";
         miniBtn.style.cssText = "display:none; margin:15px; background:#004d40; flex-shrink:0;";
         panel.insertBefore(miniBtn, content);
 
-        // Durum Çubuğu
         const statusBar = document.createElement('div');
         statusBar.className = "dwar-status";
         statusBar.innerText = "Hazır";
@@ -171,14 +154,14 @@
         document.body.appendChild(panel);
         dragElement(panel, header);
 
-        // --- LOGIC ---
+        // --- ELEMENTLER ---
         const btnRef = document.getElementById('btnRef');
         const btnAuto = document.getElementById('btnAuto');
         const inpFilter = document.getElementById('inpFilter');
-        const itemList = document.getElementById('itemList');
-        const logArea = document.getElementById('logArea');
         const btnMin = document.getElementById('btnMin');
 
+        // --- MANTIKSAL İŞLEMLER ---
+        
         // Tab Değişimi
         panel.querySelectorAll('.dwar-tab').forEach(t => {
             t.onclick = () => {
@@ -190,7 +173,7 @@
             };
         });
 
-        // Ayarları Kaydet
+        // Ayarlar
         document.getElementById('btnSave').onclick = () => {
             config.themeColor = document.getElementById('confColor').value;
             config.delayMin = parseInt(document.getElementById('confMin').value);
@@ -203,7 +186,7 @@
         };
 
         document.getElementById('btnReset').onclick = () => {
-            if(confirm("İstatistikler silinsin mi?")) {
+            if(confirm("İstatistikler silinecek?")) {
                 stats = {};
                 localStorage.setItem(STORAGE_STATS, JSON.stringify(stats));
                 renderStats();
@@ -214,11 +197,10 @@
             panel.style.borderColor = config.themeColor;
             header.style.background = config.themeColor;
             document.querySelector('.dwar-tab.active').style.borderBottomColor = config.themeColor;
-            // Invert butonları güncelle
             filterAndRender();
         }
 
-        // İstatistik Render
+        // İstatistik
         function renderStats() {
             const list = document.getElementById('statsList');
             const total = document.getElementById('totalStat');
@@ -230,9 +212,14 @@
                 list.innerHTML += `<div class="dwar-stat-row"><span style="color:#ccc">${k}</span><span style="color:white;font-weight:bold">${stats[k]}</span></div>`;
             }
             total.innerText = sum;
-            if(sum === 0) list.innerHTML = "<div style='text-align:center;color:#666;margin-top:20px'>Henüz veri yok.</div>";
+            if(sum === 0) list.innerHTML = "<div style='text-align:center;color:#666;margin-top:20px'>Veri yok.</div>";
         }
-        function saveStat(n) { if(!stats[n]) stats[n]=0; stats[n]++; localStorage.setItem(STORAGE_STATS, JSON.stringify(stats)); }
+        
+        function saveStat(n) { 
+            if(!stats[n]) stats[n]=0; 
+            stats[n]++; 
+            localStorage.setItem(STORAGE_STATS, JSON.stringify(stats)); 
+        }
 
         // Minimize
         btnMin.onclick = () => {
@@ -254,7 +241,7 @@
         };
         document.getElementById('btnClose').onclick = () => { panel.remove(); clearTimeout(monitorTimer); clearInterval(uiTimer); };
 
-        // Helpers
+        // Helperlar
         function setStatus(m, t) {
             statusBar.innerText = m;
             statusBar.style.background = t=='active'?'#004d40':t=='error'?'#b71c1c':t=='wait'?'#e65100':'#222';
@@ -270,10 +257,7 @@
             const t = b.innerText;
             b.innerText = "⛔"; b.style.background = "#b71c1c"; b.style.color = "#fff"; b.disabled = true;
             setTimeout(() => { 
-                b.innerText = t; 
-                b.style.background = "#eee";
-                b.style.color = config.themeColor;
-                b.disabled = false; 
+                b.innerText = t; b.style.background = "#eee"; b.style.color = config.themeColor; b.disabled = false; 
             }, 1000);
         }
         function startVisualTimer(sec, name, num) {
@@ -282,7 +266,7 @@
             uiTimer = setInterval(() => { l--; if(l>0) setStatus(`Toplanıyor: ${name} - ${num} ... ${l}s`, 'active'); else { clearInterval(uiTimer); setStatus("Tamamlanıyor...", 'wait'); } }, 1000);
         }
 
-        // Bot Logic
+        // Bot Kontrolleri
         function toggleAuto() {
             if(!autoActive) {
                 autoActive = true; isBusy = true;
@@ -295,6 +279,7 @@
                 miniBtn.innerText = "OTO BAŞLAT"; miniBtn.style.background = "#004d40";
                 clearTimeout(monitorTimer); clearInterval(uiTimer);
                 setStatus("Durduruldu", "normal"); addLog("Oto Durdu", "orange");
+                currentTask = null;
             }
         }
         btnAuto.onclick = toggleAuto; miniBtn.onclick = toggleAuto;
@@ -330,50 +315,38 @@
             l.forEach(i => {
                 const r = document.createElement('div'); r.className = "dwar-list-item";
                 
-                // Resim Logic (DÜZELTİLDİ)
                 let imH = `<div class="dwar-img-box"></div>`;
                 if(i.swf) {
                     const c = i.swf.split('.')[0];
                     const imgClass = `img-cache-${c}`;
-                    
                     if(!imageCache[c] && !activeRequests[c] && !failedImages[c]) {
                         activeRequests[c]=1;
                         fetch(`https://dwar.gen.tr/images/data/canvas/hunt_res/${c}/${c}.png`).then(res=>{if(!res.ok)throw 1;return res.blob()}).then(b=>{
                             const fr = new FileReader();
-                            fr.onloadend = () => { 
-                                imageCache[c]=fr.result; 
-                                delete activeRequests[c]; 
-                                document.querySelectorAll(`.${imgClass}`).forEach(e=>e.style.backgroundImage=`url('${fr.result}')`); 
-                            };
+                            fr.onloadend = () => { imageCache[c]=fr.result; delete activeRequests[c]; document.querySelectorAll(`.${imgClass}`).forEach(e=>e.style.backgroundImage=`url('${fr.result}')`); };
                             fr.readAsDataURL(b);
                         }).catch(()=>{delete activeRequests[c]; failedImages[c]=1;});
                     }
                     const bg = imageCache[c] ? `background-image:url('${imageCache[c]}')` : '';
-                    // Scale class burada kullanılıyor
                     imH = `<div class="dwar-img-box"><div class="dwar-img-inner ${imgClass}" style="${bg}"></div></div>`;
                 }
 
                 r.innerHTML = `<div style="display:flex;align-items:center">${imH}<span style="font-weight:bold;color:#ccc">${i.name} <span style="color:#666;font-size:11px">(${i.num})</span></span></div>`;
                 
-                // INVERT BUTTON STYLING
                 const b = document.createElement('button'); 
                 b.innerText = "AL"; 
                 b.className = "dwar-btn dwar-btn-invert";
-                b.style.flex = "none";
-                b.style.width = "60px";
-                b.style.fontSize = "11px";
-                b.style.padding = "6px";
-                
-                b.style.backgroundColor = "#eee";
-                b.style.color = config.themeColor;
-                b.style.border = `1px solid ${config.themeColor}`;
+                b.style.flex = "none"; b.style.width = "60px"; b.style.fontSize = "11px"; b.style.padding = "6px";
+                b.style.backgroundColor = "#eee"; b.style.color = config.themeColor; b.style.border = `1px solid ${config.themeColor}`;
                 
                 b.onmouseenter = () => { if(!b.disabled) { b.style.backgroundColor = config.themeColor; b.style.color = "#fff"; } };
                 b.onmouseleave = () => { if(!b.disabled) { b.style.backgroundColor = "#eee"; b.style.color = config.themeColor; } };
 
                 b.onclick = () => {
                     if(autoActive || isBusy) { addLog("Meşgul", "orange"); flash(b); return; }
-                    addLog(`Manuel: ${i.name} - ${i.num}`, "cyan"); req(i.num, i.name);
+                    addLog(`Manuel Başladı: ${i.name} - ${i.num}`, "cyan"); 
+                    currentTask = { name: i.name, num: i.num }; // Manuel takip için
+                    sendReq(i.num, i.name);
                     isBusy = true; setStatus("Manuel...", "active");
                     monitorTimer = setTimeout(monitorLoop, 1000);
                 };
@@ -381,15 +354,18 @@
             });
         }
 
-        function req(n, nm) {
-            fetch(`https://dwar.gen.tr/hunt_conf.php?mode=farm&action=chek&xy=0&sig=${SparkMD5.hash("0"+n+SECRET_KEY)}&num=${n}&t=1`)
-            .then(r=>r.text()).then(d=>{
-                const x = new DOMParser().parseFromString(d, "text/xml").getElementsByTagName("req")[0];
-                if(x && x.getAttribute("status")=="0") {
-                    const m = x.getAttribute("msg") || "Bilinmeyen";
-                    addLog(`HATA (${nm}): ${m}`, "red");
+        function sendReq(num, name) {
+            const url = `https://dwar.gen.tr/hunt_conf.php?mode=farm&action=chek&xy=0&sig=${SparkMD5.hash("0"+num+SECRET_KEY)}&num=${num}&t=1`;
+            fetch(url).then(r=>r.text()).then(d=>{
+                const p = new DOMParser();
+                const x = p.parseFromString(d, "text/xml");
+                const r = x.getElementsByTagName("req")[0];
+                if(r && r.getAttribute("status")=="0") {
+                    const m = r.getAttribute("msg") || "Bilinmeyen";
+                    addLog(`HATA (${name}): ${m}`, "red");
+                    currentTask = null; // Hata ise görevi sil
                 }
-            }).catch(()=>addLog("Ağ Hatası","red"));
+            }).catch(()=> { addLog("Ağ Hatası","red"); currentTask = null; });
         }
 
         async function autoStep() {
@@ -398,45 +374,94 @@
             await refreshList(true);
             const t = filterAndRender();
             if(t.length > 0) {
-                addLog(`Bulundu: ${t[0].name} - ${t[0].num}`, "cyan"); req(t[0].num, t[0].name);
-                setStatus("Senk...", "wait"); monitorTimer = setTimeout(monitorLoop, 2000);
+                const target = t[0];
+                addLog(`Toplamaya Başlandı: ${target.name} - ${target.num}`, "cyan");
+                currentTask = { name: target.name, num: target.num }; // Görevi hafızaya al
+                sendReq(target.num, target.name);
+                setStatus("Senk...", "wait"); 
+                monitorTimer = setTimeout(monitorLoop, 2000);
             } else {
                 addLog("Bulunamadı", "gray"); setStatus("Yok. Bekleniyor...", "wait");
                 monitorTimer = setTimeout(autoStep, 5000);
             }
         }
 
+        // --- MONITOR LOOP (DÜZELTİLEN KISIM) ---
         async function monitorLoop() {
             try {
                 const r = await fetch('https://dwar.gen.tr/hunt_conf.php?mode=farm&action=chek&xy=0&end=1');
                 const t = await r.text();
-                const x = new DOMParser().parseFromString(t, "text/xml").getElementsByTagName("req")[0];
-                if(x) {
-                    const st = x.getAttribute("status"), nm = x.getAttribute("name"), nu = x.getAttribute("num");
-                    const lf = parseInt(x.getAttribute("ftime")) - parseInt(x.getAttribute("stime"));
+                const p = new DOMParser();
+                const x = p.parseFromString(t, "text/xml");
+                const req = x.getElementsByTagName("req")[0];
+
+                if(req) {
+                    const st = req.getAttribute("status");
+                    const ft = parseInt(req.getAttribute("ftime"));
+                    const sm = parseInt(req.getAttribute("stime"));
+                    const nm = req.getAttribute("name");
+                    const nu = req.getAttribute("num");
+                    const msg = req.getAttribute("msg");
+                    const lf = ft - sm;
+
+                    // Eğer server isim döndürüyorsa onu esas al, yoksa hafızadaki currentTask'ı
+                    const finalName = nm || (currentTask ? currentTask.name : "Bilinmeyen");
+
                     if(st === "0") {
-                        isBusy = false; const m = x.getAttribute("msg") || "Bilinmeyen";
-                        addLog(`HATA: ${m}`, "red"); setStatus(`Hata: ${m}`, "error");
-                        if(autoActive) monitorTimer = setTimeout(autoStep, 3000);
+                        isBusy = false;
+                        if(msg && msg.trim() !== "") {
+                            // GERÇEK HATA
+                            addLog(`HATA: ${msg}`, "red"); setStatus(`Hata: ${msg}`, "error");
+                            currentTask = null;
+                            if(autoActive) monitorTimer = setTimeout(autoStep, 3000);
+                        } else {
+                            // BAŞARILI / BOŞTA
+                            clearInterval(uiTimer);
+                            // Sadece görev varsa başarı say
+                            if(currentTask) {
+                                addLog(`Toplama Bitti: ${currentTask.name}`, "orange");
+                                saveStat(currentTask.name);
+                                currentTask = null;
+                            }
+                            if(autoActive) {
+                                const rn = Math.floor(Math.random()*(config.delayMax-config.delayMin))+config.delayMin;
+                                setStatus(`Bitti. Bekle: ${(rn/1000).toFixed(1)}s`, "wait");
+                                monitorTimer = setTimeout(autoStep, rn);
+                            } else setStatus("Hazır", "normal");
+                        }
                     } else if(st === "1" && lf > 0) {
-                        isBusy = true; startVisualTimer(lf, nm, nu);
+                        // MEŞGUL
+                        isBusy = true;
+                        startVisualTimer(lf, finalName, nu || (currentTask?currentTask.num:"?"));
                         monitorTimer = setTimeout(monitorLoop, (lf*1000)+1500);
                     } else {
+                        // SÜRE DOLMUŞ
                         clearInterval(uiTimer); isBusy = false;
-                        addLog(`Bitti: ${nm}`, "orange"); saveStat(nm);
+                        if(currentTask) {
+                            addLog(`Toplama Bitti: ${currentTask.name}`, "orange");
+                            saveStat(currentTask.name);
+                            currentTask = null;
+                        }
                         if(autoActive) {
                             const rn = Math.floor(Math.random()*(config.delayMax-config.delayMin))+config.delayMin;
-                            setStatus(`Soğuma: ${rn/1000}s`, "wait"); monitorTimer = setTimeout(autoStep, rn);
+                            setStatus(`Bitti. Bekle: ${(rn/1000).toFixed(1)}s`, "wait");
+                            monitorTimer = setTimeout(autoStep, rn);
                         } else setStatus("Hazır", "normal");
                     }
                 } else {
+                    // REQ YOK = BOŞTA
                     clearInterval(uiTimer); isBusy = false;
+                    currentTask = null; // Garanti olsun
                     if(autoActive) {
                         const rn = Math.floor(Math.random()*(config.delayMax-config.delayMin))+config.delayMin;
-                        setStatus(`Bekle: ${rn/1000}s`, "wait"); monitorTimer = setTimeout(autoStep, rn);
+                        setStatus(`Bekle: ${(rn/1000).toFixed(1)}s`, "wait");
+                        monitorTimer = setTimeout(autoStep, rn);
                     } else setStatus("Hazır", "normal");
                 }
-            } catch(e) { setStatus("Bağlantı Hatası", "error"); monitorTimer = setTimeout(monitorLoop, 3000); }
+            } catch(e) { 
+                setStatus("Bağlantı Hatası", "error"); 
+                monitorTimer = setTimeout(monitorLoop, 3000); 
+            }
         }
 
         function dragElement(e, h) {
