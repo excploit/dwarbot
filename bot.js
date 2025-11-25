@@ -1,8 +1,7 @@
-// --- DWAR FARM BOTU v39 (STATUS 0 FIX & SMART LOGIC) ---
+// --- DWAR FARM BOTU v40 (GIF URL FIX & STABLE) ---
 (function() {
-    console.log("Bot v39 başlatılıyor...");
+    console.log("Bot v40 başlatılıyor...");
 
-    // Kütüphane Kontrolü
     if (typeof SparkMD5 === 'undefined') {
         var script = document.createElement('script');
         script.src = "https://cdnjs.cloudflare.com/ajax/libs/spark-md5/3.0.0/spark-md5.min.js";
@@ -14,8 +13,8 @@
 
     function main() {
         const SECRET_KEY = "41775e02da98ddb63c980dee";
-        const STORAGE_CONF = "dwar_bot_v39_conf";
-        const STORAGE_STATS = "dwar_bot_v39_stats";
+        const STORAGE_CONF = "dwar_bot_v40_conf";
+        const STORAGE_STATS = "dwar_bot_v40_stats";
 
         let config;
         try {
@@ -32,19 +31,15 @@
         
         let autoActive = false; 
         let isBusy = false; 
-        let isMinimized = false;
         let monitorTimer = null; 
         let uiTimer = null;
-        let lastHeight = config.panelH + "px";
-        
-        // Mevcut görevi hafızada tutuyoruz
         let currentTask = null; 
 
         const old = document.getElementById("dwarBotPanel");
         if (old) old.remove();
 
         // --- CSS ---
-        const styleId = "dwarBotStylesV39";
+        const styleId = "dwarBotStylesV40";
         if (!document.getElementById(styleId)) {
             const style = document.createElement('style');
             style.id = styleId;
@@ -66,6 +61,7 @@
                 .dwar-list-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid #333; transition: background 0.2s; }
                 .dwar-list-item:hover { background: #252526; }
                 .dwar-img-box { width: 32px; height: 32px; background: #000; border: 1px solid #555; border-radius: 4px; margin-right: 12px; overflow: hidden; flex-shrink: 0; position: relative; }
+                /* Resimler artık tam oturuyor ve pixelated kapalı (daha yumuşak) */
                 .dwar-img-inner { width: 100%; height: 100%; background-size: 100% 100%; background-position: center; background-repeat: no-repeat; }
                 .dwar-btn-invert { background: #eee; color: ${config.themeColor}; border: 1px solid ${config.themeColor}; }
                 .dwar-btn-invert:hover { background: ${config.themeColor}; color: #fff; }
@@ -76,13 +72,13 @@
             document.head.appendChild(style);
         }
 
-        // --- PANEL ---
+        // --- PANEL HTML ---
         const panel = document.createElement('div');
         panel.id = "dwarBotPanel";
         
         const header = document.createElement('div');
         header.className = "dwar-header";
-        header.innerHTML = `<span>Bot v39</span><div><span id="btnMin" style="cursor:pointer;margin-right:15px;padding:5px">[_]</span><span id="btnClose" style="cursor:pointer;padding:5px">[X]</span></div>`;
+        header.innerHTML = `<span>Bot v40</span><div><span id="btnMin" style="cursor:pointer;margin-right:15px;padding:5px">[_]</span><span id="btnClose" style="cursor:pointer;padding:5px">[X]</span></div>`;
         panel.appendChild(header);
 
         const tabs = document.createElement('div');
@@ -93,7 +89,7 @@
         const content = document.createElement('div');
         content.className = "dwar-content";
 
-        // MAIN
+        // MAIN VIEW
         const vMain = document.createElement('div');
         vMain.id = "viewMain";
         vMain.className = "dwar-view show";
@@ -110,7 +106,7 @@
         `;
         content.appendChild(vMain);
 
-        // STATS
+        // STATS VIEW
         const vStats = document.createElement('div');
         vStats.id = "viewStats";
         vStats.className = "dwar-view dwar-view-padded";
@@ -123,7 +119,7 @@
         `;
         content.appendChild(vStats);
 
-        // SETTINGS
+        // SETTINGS VIEW
         const vSettings = document.createElement('div');
         vSettings.id = "viewSettings";
         vSettings.className = "dwar-view dwar-view-padded";
@@ -154,15 +150,13 @@
         document.body.appendChild(panel);
         dragElement(panel, header);
 
-        // --- ELEMENTLER ---
+        // --- LOGIC START ---
         const btnRef = document.getElementById('btnRef');
         const btnAuto = document.getElementById('btnAuto');
         const inpFilter = document.getElementById('inpFilter');
         const btnMin = document.getElementById('btnMin');
 
-        // --- MANTIKSAL İŞLEMLER ---
-        
-        // Tab Değişimi
+        // Tabs
         panel.querySelectorAll('.dwar-tab').forEach(t => {
             t.onclick = () => {
                 panel.querySelectorAll('.dwar-tab').forEach(x => x.classList.remove('active'));
@@ -173,7 +167,7 @@
             };
         });
 
-        // Ayarlar
+        // Settings
         document.getElementById('btnSave').onclick = () => {
             config.themeColor = document.getElementById('confColor').value;
             config.delayMin = parseInt(document.getElementById('confMin').value);
@@ -186,7 +180,7 @@
         };
 
         document.getElementById('btnReset').onclick = () => {
-            if(confirm("İstatistikler silinecek?")) {
+            if(confirm("İstatistikler silinsin mi?")) {
                 stats = {};
                 localStorage.setItem(STORAGE_STATS, JSON.stringify(stats));
                 renderStats();
@@ -200,7 +194,6 @@
             filterAndRender();
         }
 
-        // İstatistik
         function renderStats() {
             const list = document.getElementById('statsList');
             const total = document.getElementById('totalStat');
@@ -222,6 +215,7 @@
         }
 
         // Minimize
+        let lastHeight = config.panelH + "px";
         btnMin.onclick = () => {
             isMinimized = !isMinimized;
             if (isMinimized) {
@@ -241,7 +235,6 @@
         };
         document.getElementById('btnClose').onclick = () => { panel.remove(); clearTimeout(monitorTimer); clearInterval(uiTimer); };
 
-        // Helperlar
         function setStatus(m, t) {
             statusBar.innerText = m;
             statusBar.style.background = t=='active'?'#004d40':t=='error'?'#b71c1c':t=='wait'?'#e65100':'#222';
@@ -266,7 +259,7 @@
             uiTimer = setInterval(() => { l--; if(l>0) setStatus(`Toplanıyor: ${name} - ${num} ... ${l}s`, 'active'); else { clearInterval(uiTimer); setStatus("Tamamlanıyor...", 'wait'); } }, 1000);
         }
 
-        // Bot Kontrolleri
+        // Auto Logic
         function toggleAuto() {
             if(!autoActive) {
                 autoActive = true; isBusy = true;
@@ -286,6 +279,7 @@
         btnRef.onclick = () => refreshList();
         inpFilter.oninput = () => filterAndRender();
 
+        // --- LIST FETCH & PARSE (DÜZELTİLDİ) ---
         async function refreshList(s=false) {
             if(!s) { itemList.innerHTML = "<div style='text-align:center;padding:20px;color:yellow'>Yükleniyor...</div>"; setStatus("Liste çekiliyor..."); }
             try {
@@ -295,7 +289,19 @@
                 const x = p.parseFromString(t, "text/xml");
                 const i = x.getElementsByTagName("item");
                 allItems = [];
-                for(let k=0; k<i.length; k++) allItems.push({ name: i[k].getAttribute("name"), num: i[k].getAttribute("num"), swf: i[k].getAttribute("swf") });
+                for(let k=0; k<i.length; k++) {
+                    // Pic varsa al, yoksa swf'den üret (.gif ekle)
+                    let imgFile = i[k].getAttribute("pic");
+                    if(!imgFile && i[k].getAttribute("swf")) {
+                        imgFile = i[k].getAttribute("swf").split('.')[0] + ".gif";
+                    }
+                    
+                    allItems.push({
+                        name: i[k].getAttribute("name"),
+                        num: i[k].getAttribute("num"),
+                        imgFile: imgFile // picId yerine direkt dosya adı
+                    });
+                }
                 allItems.sort((a,b) => a.name.localeCompare(b.name));
                 filterAndRender();
                 if(!s) setStatus(`Yenilendi (${allItems.length})`);
@@ -309,6 +315,7 @@
             render(r); return r;
         }
 
+        // --- RENDER (URL FIX) ---
         function render(l) {
             itemList.innerHTML = "";
             if(l.length===0) { itemList.innerHTML = "<div style='text-align:center;padding:20px;color:#666'>Sonuç yok</div>"; return; }
@@ -316,18 +323,27 @@
                 const r = document.createElement('div'); r.className = "dwar-list-item";
                 
                 let imH = `<div class="dwar-img-box"></div>`;
-                if(i.swf) {
-                    const c = i.swf.split('.')[0];
-                    const imgClass = `img-cache-${c}`;
-                    if(!imageCache[c] && !activeRequests[c] && !failedImages[c]) {
-                        activeRequests[c]=1;
-                        fetch(`https://dwar.gen.tr/images/data/canvas/hunt_res/${c}/${c}.png`).then(res=>{if(!res.ok)throw 1;return res.blob()}).then(b=>{
-                            const fr = new FileReader();
-                            fr.onloadend = () => { imageCache[c]=fr.result; delete activeRequests[c]; document.querySelectorAll(`.${imgClass}`).forEach(e=>e.style.backgroundImage=`url('${fr.result}')`); };
-                            fr.readAsDataURL(b);
-                        }).catch(()=>{delete activeRequests[c]; failedImages[c]=1;});
+                if(i.imgFile) {
+                    // Dosya adını nokta içerebileceği için benzersiz ID yap
+                    const safeId = i.imgFile.replace(/[^a-zA-Z0-9]/g, '');
+                    const imgClass = `img-cache-${safeId}`;
+                    
+                    if(!imageCache[safeId] && !activeRequests[safeId] && !failedImages[safeId]) {
+                        activeRequests[safeId]=1;
+                        // URL artık direkt kullanılıyor
+                        fetch(`https://dwar.gen.tr/images/data/farm/${i.imgFile}`)
+                            .then(res=>{if(!res.ok)throw 1;return res.blob()})
+                            .then(b=>{
+                                const fr = new FileReader();
+                                fr.onloadend = () => { 
+                                    imageCache[safeId]=fr.result; 
+                                    delete activeRequests[safeId]; 
+                                    document.querySelectorAll(`.${imgClass}`).forEach(e=>e.style.backgroundImage=`url('${fr.result}')`); 
+                                };
+                                fr.readAsDataURL(b);
+                            }).catch(()=>{delete activeRequests[safeId]; failedImages[safeId]=1;});
                     }
-                    const bg = imageCache[c] ? `background-image:url('${imageCache[c]}')` : '';
+                    const bg = imageCache[safeId] ? `background-image:url('${imageCache[safeId]}')` : '';
                     imH = `<div class="dwar-img-box"><div class="dwar-img-inner ${imgClass}" style="${bg}"></div></div>`;
                 }
 
@@ -345,7 +361,7 @@
                 b.onclick = () => {
                     if(autoActive || isBusy) { addLog("Meşgul", "orange"); flash(b); return; }
                     addLog(`Manuel Başladı: ${i.name} - ${i.num}`, "cyan"); 
-                    currentTask = { name: i.name, num: i.num }; // Manuel takip için
+                    currentTask = { name: i.name, num: i.num };
                     sendReq(i.num, i.name);
                     isBusy = true; setStatus("Manuel...", "active");
                     monitorTimer = setTimeout(monitorLoop, 1000);
@@ -363,7 +379,7 @@
                 if(r && r.getAttribute("status")=="0") {
                     const m = r.getAttribute("msg") || "Bilinmeyen";
                     addLog(`HATA (${name}): ${m}`, "red");
-                    currentTask = null; // Hata ise görevi sil
+                    currentTask = null;
                 }
             }).catch(()=> { addLog("Ağ Hatası","red"); currentTask = null; });
         }
@@ -376,7 +392,7 @@
             if(t.length > 0) {
                 const target = t[0];
                 addLog(`Toplamaya Başlandı: ${target.name} - ${target.num}`, "cyan");
-                currentTask = { name: target.name, num: target.num }; // Görevi hafızaya al
+                currentTask = { name: target.name, num: target.num };
                 sendReq(target.num, target.name);
                 setStatus("Senk...", "wait"); 
                 monitorTimer = setTimeout(monitorLoop, 2000);
@@ -386,7 +402,6 @@
             }
         }
 
-        // --- MONITOR LOOP (DÜZELTİLEN KISIM) ---
         async function monitorLoop() {
             try {
                 const r = await fetch('https://dwar.gen.tr/hunt_conf.php?mode=farm&action=chek&xy=0&end=1');
@@ -399,30 +414,29 @@
                     const st = req.getAttribute("status");
                     const ft = parseInt(req.getAttribute("ftime"));
                     const sm = parseInt(req.getAttribute("stime"));
-                    const nm = req.getAttribute("name");
+                    const nm = req.getAttribute("name"); 
                     const nu = req.getAttribute("num");
                     const msg = req.getAttribute("msg");
                     const lf = ft - sm;
-
-                    // Eğer server isim döndürüyorsa onu esas al, yoksa hafızadaki currentTask'ı
                     const finalName = nm || (currentTask ? currentTask.name : "Bilinmeyen");
 
                     if(st === "0") {
                         isBusy = false;
+                        // Hata mesajı varsa (msg doluysa) -> HATA
                         if(msg && msg.trim() !== "") {
-                            // GERÇEK HATA
                             addLog(`HATA: ${msg}`, "red"); setStatus(`Hata: ${msg}`, "error");
                             currentTask = null;
                             if(autoActive) monitorTimer = setTimeout(autoStep, 3000);
-                        } else {
-                            // BAŞARILI / BOŞTA
+                        } 
+                        // Hata mesajı yoksa (msg boş) -> BAŞARI (Sunucu bitmiş ve boşa düşmüş)
+                        else {
                             clearInterval(uiTimer);
-                            // Sadece görev varsa başarı say
                             if(currentTask) {
-                                addLog(`Toplama Bitti: ${currentTask.name}`, "orange");
+                                addLog(`Bitti: ${currentTask.name}`, "orange");
                                 saveStat(currentTask.name);
                                 currentTask = null;
                             }
+                            // Yeni döngüye geç
                             if(autoActive) {
                                 const rn = Math.floor(Math.random()*(config.delayMax-config.delayMin))+config.delayMin;
                                 setStatus(`Bitti. Bekle: ${(rn/1000).toFixed(1)}s`, "wait");
@@ -430,38 +444,33 @@
                             } else setStatus("Hazır", "normal");
                         }
                     } else if(st === "1" && lf > 0) {
-                        // MEŞGUL
                         isBusy = true;
                         startVisualTimer(lf, finalName, nu || (currentTask?currentTask.num:"?"));
                         monitorTimer = setTimeout(monitorLoop, (lf*1000)+1500);
                     } else {
-                        // SÜRE DOLMUŞ
                         clearInterval(uiTimer); isBusy = false;
                         if(currentTask) {
-                            addLog(`Toplama Bitti: ${currentTask.name}`, "orange");
+                            addLog(`Bitti: ${currentTask.name}`, "orange");
                             saveStat(currentTask.name);
                             currentTask = null;
                         }
                         if(autoActive) {
                             const rn = Math.floor(Math.random()*(config.delayMax-config.delayMin))+config.delayMin;
-                            setStatus(`Bitti. Bekle: ${(rn/1000).toFixed(1)}s`, "wait");
-                            monitorTimer = setTimeout(autoStep, rn);
+                            setStatus(`Soğuma: ${rn/1000}s`, "wait"); monitorTimer = setTimeout(autoStep, rn);
                         } else setStatus("Hazır", "normal");
                     }
                 } else {
-                    // REQ YOK = BOŞTA
+                    // Req yok
                     clearInterval(uiTimer); isBusy = false;
-                    currentTask = null; // Garanti olsun
+                    // Burada da currentTask varsa bitmiş sayabiliriz ama garanti olsun diye ellemiyoruz
+                    // Sadece yeni döngüye geçiyoruz
+                    currentTask = null;
                     if(autoActive) {
                         const rn = Math.floor(Math.random()*(config.delayMax-config.delayMin))+config.delayMin;
-                        setStatus(`Bekle: ${(rn/1000).toFixed(1)}s`, "wait");
-                        monitorTimer = setTimeout(autoStep, rn);
+                        setStatus(`Bekle: ${rn/1000}s`, "wait"); monitorTimer = setTimeout(autoStep, rn);
                     } else setStatus("Hazır", "normal");
                 }
-            } catch(e) { 
-                setStatus("Bağlantı Hatası", "error"); 
-                monitorTimer = setTimeout(monitorLoop, 3000); 
-            }
+            } catch(e) { setStatus("Bağlantı Hatası", "error"); monitorTimer = setTimeout(monitorLoop, 3000); }
         }
 
         function dragElement(e, h) {
